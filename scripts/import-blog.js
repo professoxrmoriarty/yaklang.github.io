@@ -38,10 +38,10 @@ const TOPIC_RULES = [
   { key: "traffic", keywords: ["MITM", "劫持", "流量", "TUN", "抓包", "Websocket", "websocket"] },
   { key: "webfuzzer", keywords: ["Fuzzer", "Fuzz", "Fuzztag", "爆破", "Repeater", "Intruder", "Match Extract"] },
   { key: "java-sec", keywords: ["Java", "反序列化", "yso", "JNDI", "字节码", "Shiro", "Fastjson", "FastJson", "t3", "T3", "IIOP", "ldap", "Weblogic", "weblogic", "序列化", "内存马"] },
-  { key: "hotpatch", keywords: ["热加载", "Mock 热加载", "全局热加载"] },
+  { key: "hotpatch", keywords: ["HotPatch", "Mock 热加载", "全局热加载"] },
   { key: "range", keywords: ["靶场", "Vulinbox", "通关", "CTF", "HTB", "BountyHunter", "夺舍"] },
   { key: "crypto", keywords: ["国密", "加密", "验签", "DES", "AES", "证书", "签名"] },
-  { key: "vuln-plugin", keywords: ["POC", "PoC", "Poc", "Nuclei", "nuclei", "CVE", "插件", "扫描", "XSS", "SQL", "SSRF", "RCE", "log4j", "Log4j", "ThinkPHP", "未授权", "重定向", "走私", "越权", "目录遍历", "文件上传"] },
+  { key: "vuln-plugin", keywords: ["POC", "PoC", "Poc", "Nuclei", "nuclei", "CVE", "插件", "扫描", "XSS", "SQL", "SSRF", "RCE", "log4j", "Log4j", "ThinkPHP", "未授权", "重定向", "走私", "越权", "Directory Traversal", "文件上传"] },
 ];
 
 const YEAR_LABELS = {
@@ -56,10 +56,10 @@ const YEAR_LABELS = {
 const TOPIC_LABELS = {
   "code-audit": { label: "代码审计", description: "IRify / SSA / SyntaxFlow 静态代码分析与代码审计实战" },
   "ai": { label: "AI", description: "AI 安全 Agent、Memfit 记忆、RAG 与智能化能力" },
-  "traffic": { label: "流量分析", description: "MITM 劫持、TUN、流量分析与协作渗透" },
+  "traffic": { label: "Traffic Analysis", description: "MITM 劫持、TUN、流量分析与协作渗透" },
   "webfuzzer": { label: "WebFuzzer", description: "Web Fuzzer、Fuzztag 与爆破测试" },
   "java-sec": { label: "Java 安全", description: "Java 反序列化、字节码、协议分析与利用" },
-  "hotpatch": { label: "热加载", description: "Yakit / WebFuzzer / MITM 热加载技巧" },
+  "hotpatch": { label: "HotPatch", description: "Yakit / WebFuzzer / MITM 热加载技巧" },
   "range": { label: "靶场实战", description: "Vulinbox 与各类靶场通关实战" },
   "crypto": { label: "加密对抗", description: "国密、前端加密、验签与证书相关对抗" },
   "vuln-plugin": { label: "漏洞检测与插件", description: "POC、Nuclei、CVE、被动扫描与插件开发" },
