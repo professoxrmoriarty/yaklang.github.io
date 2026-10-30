@@ -1,4 +1,4 @@
-name: "1. Smart Diff Sync, Progressive Translate & Release (English Ecosystem)"
+name: "1. Smart Diff Sync & Progressive Translate"
 
 on:
   schedule:
@@ -21,8 +21,8 @@ env:
   YTRAY_FORK_REPO: "https://github.com/professoxrmoriarty/ytray.git"
 
 jobs:
-  sync-translate-release:
-    name: "Smart Sync, Translate & Package (${{ github.event.repository.name }})"
+  sync-and-translate:
+    name: "Smart Diff Sync & Progressive Translate (${{ github.event.repository.name }})"
     runs-on: ubuntu-latest
     steps:
       - name: "1. Checkout Fork Repository"
@@ -65,9 +65,12 @@ jobs:
             git commit --no-edit || true
           fi
 
+          # မိမိ၏ workflow ဖိုင် (၂) ဖိုင် (1-sync-translate.yml နှင့် 2-build-release.yml) ကိုသာ ထိန်းသိမ်းမည်
           rm -rf .github/workflows/*
           mkdir -p .github/workflows
           cp /tmp/backup/workflows/1-sync-translate.yml .github/workflows/ 2>/dev/null || true
+          cp /tmp/backup/workflows/2-build-release.yml .github/workflows/ 2>/dev/null || true
+
           if [ -f "/tmp/backup/security_glossary.json" ]; then
             cp /tmp/backup/security_glossary.json .github/security_glossary.json
           fi
@@ -88,26 +91,21 @@ jobs:
             rm -rf "/tmp/${NAME}_fork"
           done
 
-      - name: "3. Setup Golang, Node.js & Python"
+      - name: "3. Setup Golang & Python"
         uses: actions/setup-go@v5
         with:
           go-version: '1.23.x'
 
-      - name: "4. Setup Node.js 22"
-        uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-
-      - name: "5. Setup Python & Install Translation Libraries"
+      - name: "4. Setup Python 3.11"
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
-      - name: "6. Install Python Packages"
+      - name: "5. Install Translation Libraries"
         run: |
           python3 -m pip install --upgrade pip deep-translator PyYAML
 
-      - name: "7. Progressive Translation (Stop on Limit, Save Cache & Resume)"
+      - name: "6. Progressive Translation (Stop on Limit, Save Cache & Resume)"
         id: translate
         run: |
           python3 - << 'EOF'
@@ -130,31 +128,41 @@ jobs:
           def has_zh(text):
               return bool(zh_char_re.search(str(text)))
 
-          exact_glossary, inline_glossary = {}, {}
-          if os.path.exists(GLOSSARY_FILE):
+          def safe_load_json(filepath, default_val=None):
+              if default_val is None:
+                  default_val = {}
+              if not os.path.exists(filepath):
+                  return default_val
               try:
-                  with open(GLOSSARY_FILE, 'r', encoding='utf-8') as f:
-                      g_data = json.load(f)
-                  for _, mapping in g_data.get("terms", {}).items():
-                      if isinstance(mapping, dict):
-                          exact_glossary.update(mapping)
-                          inline_glossary.update(mapping)
-                  exact_glossary.update(g_data.get("exact_only", {}))
+                  with open(filepath, 'r', encoding='utf-8') as f:
+                      raw = f.read()
+                  return json.loads(raw)
               except Exception:
-                  pass
+                  try:
+                      cleaned = re.sub(r',\s*([}\]])', r'\1', raw)
+                      data = json.loads(cleaned)
+                      with open(filepath, 'w', encoding='utf-8') as fw:
+                          json.dump(data, fw, ensure_ascii=False, indent=2)
+                      return data
+                  except Exception:
+                      return default_val
+
+          exact_glossary, inline_glossary = {}, {}
+          g_data = safe_load_json(GLOSSARY_FILE, {})
+          if isinstance(g_data, dict):
+              for _, mapping in g_data.get("terms", {}).items():
+                  if isinstance(mapping, dict):
+                      exact_glossary.update(mapping)
+                      inline_glossary.update(mapping)
+              if isinstance(g_data.get("exact_only"), dict):
+                  exact_glossary.update(g_data.get("exact_only", {}))
           sorted_inline_keys = sorted(inline_glossary.keys(), key=len, reverse=True)
 
-          # Merge caches from yakit, yaklang, ytray, and local repo
           cache = {}
           for cf in ("/tmp/yaklang_cache.json", "/tmp/yakit_cache.json", "/tmp/ytray_cache.json", CACHE_FILE):
-              if os.path.exists(cf):
-                  try:
-                      with open(cf, 'r', encoding='utf-8') as f:
-                          d = json.load(f)
-                          if isinstance(d, dict):
-                              cache.update(d)
-                  except Exception:
-                      pass
+              d = safe_load_json(cf, {})
+              if isinstance(d, dict):
+                  cache.update(d)
 
           def save_cache():
               with open(CACHE_FILE, 'w', encoding='utf-8') as f:
@@ -284,7 +292,6 @@ jobs:
 
           save_cache()
 
-          # Apply to code/JSON files
           for p in code_files:
               try:
                   with open(p, 'r', encoding='utf-8') as f:
@@ -315,7 +322,6 @@ jobs:
               except Exception:
                   pass
 
-          # Apply to YAML files
           for p in yaml_files:
               try:
                   with open(p, 'r', encoding='utf-8') as f:
@@ -341,7 +347,6 @@ jobs:
               except Exception:
                   pass
 
-          # Apply to Markdown documentation files
           for p in md_files:
               try:
                   with open(p, 'r', encoding='utf-8') as f:
@@ -373,7 +378,7 @@ jobs:
               f.write(f"remaining_count={len(remaining)}\n")
           EOF
 
-      - name: "8. Go Syntax Verification (gofmt Auto-Revert)"
+      - name: "7. Go Syntax Verification (gofmt Auto-Revert)"
         run: |
           for f in $(git ls-files --modified '*.go'); do
             if [ -f "$f" ] && ! gofmt -e "$f" >/dev/null 2>&1; then
@@ -381,7 +386,9 @@ jobs:
             fi
           done
 
-      - name: "9. Commit Progress to english-edition Branch"
+      - name: "8. Commit Progress & Trigger 2-build-release.yml When 100% Complete"
+        env:
+          GH_TOKEN: ${{ secrets.PAT_TOKEN || secrets.GITHUB_TOKEN }}
         run: |
           git add -f .i18n_cache.json .github/ 2>/dev/null || true
           git add -A
@@ -394,45 +401,11 @@ jobs:
             git push origin HEAD:refs/heads/${{ env.TARGET_BRANCH }} --force
           fi
 
-      - name: "10. Build & Package Release Assets When 100% Complete"
-        id: pkg
-        if: steps.translate.outputs.is_complete == 'true' || inputs.force_release == 'true'
-        run: |
-          mkdir -p release-assets
-          REPO_NAME="${{ github.event.repository.name }}"
-          TAG="v$(date +'%Y.%m.%d')-en"
-          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
-
-          # 1. Chrome Extension Repo ဖြစ်ပါက Yakit နှင့် YTray သုံးရန် ZIP နှစ်မျိုးလုံး ထုတ်ပေးမည်
-          if [ "$REPO_NAME" = "yaklang-chrome-extension" ]; then
-            if [ -f "package.json" ]; then
-              npm install --legacy-peer-deps || yarn install --ignore-engines || true
-              npm run build || yarn build || true
-            fi
-            BUILD_DIR="."
-            for d in dist build out extension; do
-              if [ -d "$d" ] && [ -f "$d/manifest.json" ]; then
-                BUILD_DIR="$d"
-                break
-              fi
-            done
-            (cd "$BUILD_DIR" && zip -r "$GITHUB_WORKSPACE/release-assets/google-chrome-plugin.zip" . -x "*.git*" "node_modules/*" "release-assets/*")
-            cp release-assets/google-chrome-plugin.zip release-assets/yakit-browser-agent.zip
-          else
-            # 2. awesome-yak-scripts / pentest-crawler-ai-enhance / syntaxflow တို့အတွက် Bundle ZIP ထုတ်ပေးမည်
-            zip -r "release-assets/${REPO_NAME}-english-bundle.zip" . -x "*.git*" "node_modules/*" "release-assets/*"
+          if [ "${{ steps.translate.outputs.is_complete }}" == "true" ] || [ "${{ inputs.force_release }}" == "true" ]; then
+            EN_TAG="v$(date +'%Y.%m.%d')-en"
+            git tag -f "${EN_TAG}" HEAD
+            git push origin "refs/tags/${EN_TAG}" --force
+            echo "Triggering 2-build-release.yml for tag ${EN_TAG}..."
+            gh workflow run 2-build-release.yml --ref "${{ env.TARGET_BRANCH }}" -f tag_name="${EN_TAG}" -f target_ref="${{ env.TARGET_BRANCH }}" || \
+            gh workflow run 2-build-release.yml -f tag_name="${EN_TAG}" -f target_ref="${{ env.TARGET_BRANCH }}" || true
           fi
-          ls -lh release-assets/
-
-      - name: "11. Publish GitHub Release"
-        if: steps.translate.outputs.is_complete == 'true' || inputs.force_release == 'true'
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ steps.pkg.outputs.tag }}
-          name: "${{ github.event.repository.name }} English Edition (${{ steps.pkg.outputs.tag }})"
-          target_commitish: ${{ env.TARGET_BRANCH }}
-          overwrite: true
-          body: |
-            ### ${{ github.event.repository.name }} (English Edition) — ${{ steps.pkg.outputs.tag }}
-            * **100% Translated & Synchronized** with the Yaklang English Ecosystem (`yakit`, `yaklang`, `ytray`).
-          files: release-assets/*
